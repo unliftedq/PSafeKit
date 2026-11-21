@@ -30,6 +30,10 @@ public class EntryCollection {
         entries[index]
     }
 
+    public func entry(withUUID uuid: UUID) -> Entry? {
+        entries.first(where: { $0.uuid == uuid })
+    }
+
     public subscript(title: String) -> Entry {
         if let entry = entries.first(where: { $0.title.caseInsensitiveCompare(title) == .orderedSame }) {
             return entry

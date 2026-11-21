@@ -19,19 +19,23 @@ public final class Record: Field {
     weak var owner: RecordCollection?
 
     override var isReadOnly: Bool { owner?.isReadOnly ?? false }
+    override var timeByteCount: Int { owner?.timeByteCount ?? 4 }
 
     override var dataType: FieldDataType {
         switch type {
-        case .uuid:
+        case .uuid, .attachmentReference, .baseUUID, .aliasUUID, .shortcutUUID:
             return .uuid
-        case .creationTime, .passwordModificationTime, .lastAccessTime, .passwordExpiryTime, .lastModificationTime:
+        case .creationTime, .passwordModificationTime, .lastAccessTime, .passwordExpiryTime,
+             .lastModificationTime, .totpStartTime, .attachmentModificationTime:
             return .time
-        case .twoFactorKey:
+        case .twoFactorKey, .attachmentContent, .passkeyCredentialID, .passkeyUserHandle, .passkeyPrivateKey,
+             .totpConfiguration, .totpLength, .totpTimeStep, .passkeyAlgorithmID, .passkeySignCount:
             return .binary
         case .group, .title, .userName, .notes, .password, .url, .autotype, .passwordHistory,
              .passwordPolicy, .runCommand, .emailAddress, .ownSymbolsForPassword,
              .passwordPolicyName, .creditCardNumber, .creditCardExpiration,
-             .creditCardVerificationValue, .creditCardPin, .qrCode:
+             .creditCardVerificationValue, .creditCardPin, .qrCode, .attachmentTitle, .attachmentMediaType,
+             .attachmentFileName, .passkeyRelyingPartyID, .customTextField:
             return .text
         default:
             return .unknown
@@ -39,6 +43,7 @@ public final class Record: Field {
     }
 
     override func markAsChanged() {
+        owner?.materialize(self)
         owner?.markAsChanged(type: type)
     }
 

@@ -1,6 +1,6 @@
 # PSafeKit
 
-PSafeKit is a Swift package for reading and writing Password Safe `.psafe3` files.
+PSafeKit is a Swift package for reading and writing Password Safe V3 (`.psafe3`) and V4 (`.psafe4`) databases.
 
 This repository is a Swift port of the core model and file-format behavior from C# library `Medo.PasswordSafe`, adapted to Swift Package Manager and validated with package tests.
 
@@ -8,9 +8,9 @@ This repository is a Swift port of the core model and file-format behavior from 
 
 - Swift Package Manager library: `PSafeKit`
 - Swift language mode: 6
-- File format currently supported: `.psafe3`
-- Crypto currently implemented: Twofish, SHA-256 key stretching, HMAC-SHA256 payload authentication
-- Tested behaviors include loading existing databases, saving new databases, round-tripping entries, password changes, password history, auto-type parsing, and named password policies
+- Default output is V3. Pass `format: .v4` to `Document(passphrase:format:)` to create a V4 database. Opening and saving an existing database keeps its format; there is no implicit conversion.
+- V3 uses Twofish, SHA-256 key stretching, and HMAC-SHA256. V4 uses PBKDF2-HMAC-SHA256 and Twofish key wrap, plus separate authentication for key blocks, records, and attachment content.
+- Unrecognized header and entry fields, repeated empty groups and custom fields, and V4 attachment records are retained when editing supported databases.
 
 `.bimil` compatibility is not part of this package.
 
@@ -81,12 +81,24 @@ Document.defaultSaveApplicationName = "MyPasswordApp"
 
 ## API Notes
 
-- `Document.load(data:passphrase:)` loads a `.psafe3` database from memory.
-- `Document.saveData()` returns the full serialized `.psafe3` payload as `Data`.
+- `Document.load(data:passphrase:)` detects V3 or V4 and loads a database from memory.
+- `Document.saveData()` returns the complete encrypted database as `Data`. To persist it, write it to your own URL (for example with `.atomic`). `save()` does not write a file.
 - `Document.save()` runs the same serialization path and discards the returned `Data`.
 - `Document.trackModify` controls whether save-related metadata is updated during save.
 - `Document.trackAccess` exists for compatibility with document behavior, but access-tracking persistence is intentionally limited to the features currently implemented in this package.
-- `Entry`, `Header`, `Record`, and their collection types keep the public surface close to the original library model.
+- `Entry.dependency` and `Entry.resolvedPassword` expose alias and shortcut relationships without rewriting the original fields. `Document.addAttachment(_:to:mediaType:fileName:title:)` adds an inline V3 or independent V4 attachment; `attachmentContent(for:)` reads its bytes.
+- `HeaderCollection.values(for:)` and `RecordCollection.values(for:)` expose repeated fields. Unrecognized fields are retained but not made editable through the typed API.
+
+## Password Safe interoperability
+
+Compared against [`pwsafe/pwsafe` at `5302acb`](https://github.com/pwsafe/pwsafe/tree/5302acb15b1b598898302261ab2fa669a550a869), including the V3/V4 format descriptions and the official core reader and writer.
+
+| Format | Read/write scope | Verified against upstream core |
+| --- | --- | --- |
+| V3 | V3 major version, including the original four-byte version field. New files use `0x0311` and at least 327,680 SHA-256 rounds. The V3 MAC covers field values, not field type or length. | The official core read both a newly created PSafeKit database and an official `0x0311` database after editing and changing its passphrase in PSafeKit. Covers UTF-8, UUIDs, unknown fields, repeated empty groups, aliases, shortcuts, and inline attachment bytes. Older `0x030D` fixtures are covered by the package suite. |
+| V4 | Twofish database container for versions through `0x0402`; verified key blocks, entries, aliases, shortcuts, and independent attachment records. Changing the active passphrase preserves other key blocks. | The official core read a newly created PSafeKit database with an independent attachment. For an official `0x0402` database edited and re-saved by PSafeKit, the core accepted the replacement and second passphrases, rejected the old passphrase, and verified attachment bytes and references. |
+
+The input KDF work is bounded to avoid unbounded work from untrusted files: V3 accepts at most 10,000,000 rounds; V4 accepts 64 recipients, at most 2,097,152 rounds per recipient and 4,194,304 total, and up to 16 MiB per regular field. V4 attachment ciphertext is handled separately but the database itself is in memory. Unsupported V4 record kinds or unsupported versions are rejected instead of silently dropped. V4 does not provide an API for administering additional recipients; with multiple recipients, changing one passphrase cannot rotate the shared data keys without the other passphrases. It does not revoke keys already obtained from an older copy of the database.
 
 ## Development
 
@@ -96,7 +108,7 @@ Run the full test suite with:
 swift test
 ```
 
-At the time of writing, the package test suite covers 79 tests across 14 suites.
+The optional `PSAFEKIT_UPSTREAM_FIXTURE` environment variable enables cross-implementation tests using the [fixture driver](Tests/Interop/upstream-fixture.cpp) linked against the pinned official core. See [build instructions](Tests/Interop/README.md).
 
 ## Repository Layout
 
