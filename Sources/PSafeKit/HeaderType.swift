@@ -17,4 +17,5 @@ public enum HeaderType: UInt8, Sendable {
     case namedPasswordPolicies = 0x10
     case emptyGroups = 0x11
     case yubico = 0x12
+    case lastPasswordChange = 0x13
 }

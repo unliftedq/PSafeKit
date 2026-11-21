@@ -20,22 +20,25 @@ open class Field {
 
     var isReadOnly: Bool { false }
     var dataType: FieldDataType { .unknown }
+    var timeByteCount: Int { 4 }
+    var acceptsLegacyHexTime: Bool { false }
 
     func markAsChanged() {}
     func markAsAccessed() {}
     func willSetText(_ value: String) throws {}
 
     public var version: Int {
-        guard dataType == .version || dataType == .unknown, rawData.count == 2 else { return -1 }
-        return Int(rawData.withUnsafeBytes { $0.load(as: UInt16.self) })
+        guard dataType == .version || dataType == .unknown,
+              rawData.count == 2 || rawData.count == 4 else { return -1 }
+        return Int(rawData[rawData.startIndex]) | (Int(rawData[rawData.startIndex + 1]) << 8)
     }
 
     public var uuid: UUID {
         guard dataType == .uuid || dataType == .unknown, rawData.count == 16 else { return .empty }
         let bytes = Array(rawData)
         return UUID(uuid: (
-            bytes[3], bytes[2], bytes[1], bytes[0],
-            bytes[5], bytes[4], bytes[7], bytes[6],
+            bytes[0], bytes[1], bytes[2], bytes[3],
+            bytes[4], bytes[5], bytes[6], bytes[7],
             bytes[8], bytes[9], bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15]
         ))
     }
@@ -48,10 +51,15 @@ open class Field {
 
     public var time: Date {
         guard dataType == .time || dataType == .unknown else { return .distantPast }
-        guard rawData.count == 4 else { return .distantPast }
-        let seconds = rawData.withUnsafeBytes { $0.load(as: UInt32.self) }
+        guard [4, 5, 8].contains(rawData.count) else { return .distantPast }
         markAsAccessed()
-        return Date(timeIntervalSince1970: TimeInterval(seconds))
+        if acceptsLegacyHexTime, rawData.count == 8,
+           let text = String(data: rawData, encoding: .ascii), let seconds = UInt32(text, radix: 16) {
+            return Date(timeIntervalSince1970: TimeInterval(seconds))
+        }
+        let seconds = rawData.reversed().reduce(UInt64(0)) { $0 << 8 | UInt64($1) }
+        let unixTime = rawData.count == 8 ? TimeInterval(Int64(bitPattern: seconds)) : TimeInterval(seconds)
+        return Date(timeIntervalSince1970: unixTime)
     }
 
     public func getBytes() -> [UInt8] {
@@ -66,8 +74,10 @@ open class Field {
     public func setVersion(_ value: Int) throws {
         try ensureType(.version)
         try ensureWritable()
-        var v = UInt16(value)
-        rawData = withUnsafeBytes(of: &v) { Data($0) }
+        guard let version = UInt16(exactly: value) else {
+            throw PSafeError.argumentOutOfRange("Version", "Expected an unsigned 16-bit value.")
+        }
+        rawData = Data([UInt8(truncatingIfNeeded: version), UInt8(version >> 8)])
         markAsChanged()
     }
 
@@ -76,8 +86,8 @@ open class Field {
         try ensureWritable()
         let tuple = value.uuid
         rawData = Data([
-            tuple.3, tuple.2, tuple.1, tuple.0,
-            tuple.5, tuple.4, tuple.7, tuple.6,
+            tuple.0, tuple.1, tuple.2, tuple.3,
+            tuple.4, tuple.5, tuple.6, tuple.7,
             tuple.8, tuple.9, tuple.10, tuple.11, tuple.12, tuple.13, tuple.14, tuple.15
         ])
         markAsChanged()
@@ -94,8 +104,13 @@ open class Field {
     public func setTime(_ value: Date) throws {
         try ensureType(.time)
         try ensureWritable()
-        var seconds = UInt32(value.timeIntervalSince1970)
-        rawData = withUnsafeBytes(of: &seconds) { Data($0) }
+        let width = timeByteCount
+        let time = value.timeIntervalSince1970
+        guard time >= 0, time < TimeInterval(UInt64(1) << (width * 8)) else {
+            throw PSafeError.argumentOutOfRange("Time", "Timestamp is not representable in this database format.")
+        }
+        let seconds = UInt64(time)
+        rawData = Data((0..<width).map { UInt8(truncatingIfNeeded: seconds >> ($0 * 8)) })
         markAsChanged()
     }
 

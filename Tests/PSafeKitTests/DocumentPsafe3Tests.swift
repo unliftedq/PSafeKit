@@ -9,7 +9,7 @@ struct DocumentPsafe3Tests {
 
         #expect(doc.headers.count == 7)
         #expect(doc.headers[.version].version == 0x030D)
-        #expect(doc.headers[.uuid].uuid == UUID(uuidString: "3b872b47-dee9-4c4f-ba63-4d93a86dfa4c"))
+        #expect(doc.headers[.uuid].uuid == UUID(uuidString: "472b873b-e9de-4f4c-ba63-4d93a86dfa4c"))
         #expect(doc.headers[.nonDefaultPreferences].text == "")
         #expect(doc.headers[.timestampOfLastSave].time == utcDate(2015, 12, 28, 5, 57, 23))
         #expect(doc.headers[.lastSavedByUser].text == "Josip")
@@ -32,7 +32,7 @@ struct DocumentPsafe3Tests {
         doc.trackModify = false
 
         #expect(doc.headers.count == 8)
-        #expect(doc.headers[.uuid].uuid == UUID(uuidString: "0b073824-a406-2f4b-87b2-48656a6b5011"))
+        #expect(doc.headers[.uuid].uuid == UUID(uuidString: "2438070b-06a4-4b2f-87b2-48656a6b5011"))
         #expect(doc.headers[.recentlyUsedEntries].text == "01a93b6ef7c5af4a5990bd5c20064cc62e")
         #expect(doc.entries.count == 2)
         #expect(doc.entries[0].title == "A")
@@ -48,7 +48,7 @@ struct DocumentPsafe3Tests {
         reloaded.trackModify = false
 
         #expect(reloaded.headers.count == 8)
-        #expect(reloaded.headers[.uuid].uuid == UUID(uuidString: "0b073824-a406-2f4b-87b2-48656a6b5011"))
+        #expect(reloaded.headers[.uuid].uuid == UUID(uuidString: "2438070b-06a4-4b2f-87b2-48656a6b5011"))
         #expect(reloaded.headers[.recentlyUsedEntries].text == "01a93b6ef7c5af4a5990bd5c20064cc62e")
         #expect(reloaded.entries.count == 2)
         #expect(reloaded.entries[0].title == "A")
